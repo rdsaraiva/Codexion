@@ -214,14 +214,6 @@ An AI assistant (Claude) was used as a **tutor and reviewer**:
 
 - **Concepts**: explaining threads, mutexes, condition variables, data races, deadlock
   and Coffman's conditions, and binary heaps, with analogies and small examples.
-- **Architecture**: proposing the file layout and the structures before any code was
-  written.
-- **Code review**: the C logic (parsing, timing, heap, state, init/cleanup, dongles,
-  coders, monitor) was written by me. The AI compiled and tested it after each step,
-  pointed out errors and explained them, and I fixed them myself.
 - **Testing**: writing throw-away test harnesses (outside the repository) and running
   them with ThreadSanitizer, AddressSanitizer and `leaks`. This is how the start-up
   "chain" issue that led to the odd/even dongle order was found.
-- **Written by the AI at my request**: the `Makefile`, the final `main.c` (thread
-  creation and joining), Norm formatting fixes, and this README. All of it was reviewed
-  and explained line by line so that I can justify every part.
