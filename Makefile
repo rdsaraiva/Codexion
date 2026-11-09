@@ -18,6 +18,7 @@ SRCS		= main.c \
 			  heap.c \
 			  heap_utils.c \
 			  dongle.c \
+			  dongle_utils.c \
 			  coder.c \
 			  monitor.c
 

@@ -6,7 +6,7 @@
 /*   By: roda-fon <roda-fon@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/11/02 15:47:25 by roda-fon          #+#    #+#             */
-/*   Updated: 2026/11/02 15:53:52 by roda-fon         ###   ########.fr       */
+/*   Updated: 2026/11/09 12:00:00 by roda-fon         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -21,11 +21,12 @@ void	sim_destroy(t_sim *sim)
 	{
 		heap_free(&sim->dongles[i].queue);
 		pthread_mutex_destroy(&sim->dongles[i].lock);
-		pthread_cond_destroy(&sim->dongles[i].cond);
 		i++;
 	}
 	free(sim->dongles);
 	free(sim->coders);
 	pthread_mutex_destroy(&sim->state_lock);
 	pthread_mutex_destroy(&sim->print_lock);
+	pthread_mutex_destroy(&sim->table_lock);
+	pthread_cond_destroy(&sim->table_cond);
 }

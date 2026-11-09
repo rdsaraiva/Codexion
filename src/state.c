@@ -6,7 +6,7 @@
 /*   By: roda-fon <roda-fon@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/28 14:00:16 by roda-fon          #+#    #+#             */
-/*   Updated: 2026/10/28 15:58:18 by roda-fon         ###   ########.fr       */
+/*   Updated: 2026/11/09 12:00:00 by roda-fon         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -34,5 +34,20 @@ void	log_state(t_sim *sim, int id, char *msg)
 	pthread_mutex_lock(&sim->print_lock);
 	if (sim_running(sim))
 		printf("%ld %d %s\n", now_ms() - sim->start, id, msg);
+	pthread_mutex_unlock(&sim->print_lock);
+}
+
+void	log_compile(t_sim *sim, int id)
+{
+	long	t;
+
+	pthread_mutex_lock(&sim->print_lock);
+	if (sim_running(sim))
+	{
+		t = now_ms() - sim->start;
+		printf("%ld %d has taken a dongle\n", t, id);
+		printf("%ld %d has taken a dongle\n", t, id);
+		printf("%ld %d is compiling\n", t, id);
+	}
 	pthread_mutex_unlock(&sim->print_lock);
 }

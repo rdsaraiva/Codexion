@@ -88,7 +88,8 @@ timestamp_in_ms X burned out
 | `src/init.c` / `src/cleanup.c` | creation and destruction of every mutex, condition variable and allocation |
 | `src/time.c` | `now_ms()` and an interruptible precise `sleep_ms()` |
 | `src/heap.c` / `src/heap_utils.c` | the binary min-heap (priority queue) |
-| `src/dongle.c` | `dongle_take()` / `dongle_release()`: queueing, arbitration and cooldown |
+| `src/dongle.c` | `dongles_take()` / `dongles_release()`: atomic acquisition of both dongles |
+| `src/dongle_utils.c` | request keys (fifo/edf), the arbitration rule `can_go()` and the timed wait |
 | `src/coder.c` | the coder thread routine |
 | `src/monitor.c` | the monitor thread routine (burnout and completion detection) |
 | `src/state.c` | the shared stop flag and serialized logging |
@@ -98,36 +99,48 @@ timestamp_in_ms X burned out
 ### Deadlock (Coffman's conditions)
 
 A deadlock requires all four Coffman conditions: **mutual exclusion**, **hold and wait**,
-**no preemption** and **circular wait**. The first three are inherent to the problem (a
-dongle has one owner, a coder holds one dongle while waiting for the other, and dongles
-cannot be taken away), so the solution breaks **circular wait**.
+**no preemption** and **circular wait**. The solution breaks **hold and wait**: a coder
+takes **both dongles at once or none**. The check "are both of my dongles available?" and
+the act of taking them both happen inside one critical section (`table_lock`), so a
+coder never holds one dongle while waiting for the other. Without hold and wait, no
+cycle of coders waiting on each other's dongles can form.
 
-Coder `i` uses dongles `i` and `(i + 1) % N`. **Odd** coders take their left dongle
-first and **even** coders take their right dongle first. Two neighbours therefore always
-start by competing for the *same* dongle, so the wait-for graph can never close into a
-cycle. This also avoids a subtler problem. With a plain "lowest index first" rule, every
-coder can grab one dongle at start-up and form a long *chain* in which coders compile
-one at a time, so the last coder in the chain burns out even though the parameters are
-feasible. With the odd/even rule, the coder who loses the first race holds nothing, so
-the chain length is at most 2.
+This also avoids *chains*. When a coder grabs one dongle and then waits for the second,
+it blocks its neighbour, who blocks the next one, and so on. Coders end up compiling one
+at a time and someone burns out even though the parameters are feasible (with the
+earlier one-dongle-at-a-time design, `5 3000 200 200 200 10 400 fifo` burned out in
+about half of the runs; it no longer does).
 
-### Starvation
+### Starvation and fair arbitration
 
 Every dongle owns a **priority queue** (a binary min-heap) of pending requests, each
-stored as `{id, key}`. A coder may take a dongle only if it is **at the top of that
-dongle's queue**, so a coder cannot be overtaken indefinitely:
+stored as `{id, key}`. A waiting coder joins the queues of both of its dongles with the
+same key:
 
-- `fifo`: `key` is a per-dongle ticket counter, so requests are served in arrival order.
+- `fifo`: `key` is a global ticket counter, so requests are served in arrival order.
 - `edf`: `key = last_compile_start + time_to_burnout`, so the coder closest to burning
   out is served first.
 - **Tie-break**: equal keys are ordered by coder id, which makes the policy fully
   deterministic.
 
+A coder may take its two dongles (`can_go()`) when both are free, both cooldowns are
+over, and neither dongle is **reserved by a higher-priority neighbour**. The neighbour at
+the top of a dongle's queue reserves it only if it is also at the top of its *other*
+dongle's queue, which means it is next in line for both of its dongles. A neighbour that
+is first on one queue but itself blocked on the other does not reserve anything, so the
+coders behind it are not held up for nothing.
+
+Under fifo and edf the keys define one global order, so the waiting coder with the
+smallest key is at the top of both of its queues. It always reserves its dongles and is
+served as soon as they are free. Every waiter therefore eventually becomes that coder,
+and nobody starves.
+
 ### Dongle cooldown
 
-`dongle_release()` stores `free_at = now + dongle_cooldown`. A waiting coder may take the
-dongle only when `now >= free_at`. Because nobody signals the moment a cooldown expires,
-waiters use `pthread_cond_timedwait` with a 1 ms timeout and re-check the condition.
+`dongles_release()` stores `free_at = now + dongle_cooldown` on both dongles. A waiting
+coder may take them only when `now >= free_at`. Because nobody signals the moment a
+cooldown expires, waiters use `pthread_cond_timedwait` with a 1 ms timeout and re-check
+the condition.
 
 ### Precise burnout detection
 
@@ -139,9 +152,9 @@ always the last line printed.
 
 ### Single coder
 
-With one coder there is a single dongle, so `first == second`. The coder takes the
-dongle, then waits forever for the "second" one (which is itself) until the monitor
-reports the burnout. No special case is needed.
+With one coder there is a single dongle (`first == second`), so the coder can never
+compile. It logs `has taken a dongle` once and then waits until the monitor reports the
+burnout.
 
 ### Clean termination
 
@@ -152,30 +165,35 @@ millisecond and is joined before any resource is destroyed.
 ### Log serialization
 
 Every state message goes through `log_state()`, which holds `print_lock` for the whole
-`printf` and prints only while the simulation is running. Lines never interleave, and
-nothing appears after `burned out`.
+`printf` and prints only while the simulation is running. When a coder gets its
+dongles, `log_compile()` prints its two `has taken a dongle` lines and its `is compiling`
+line in **one** critical section, so they always appear consecutively. Lines never
+interleave, and nothing appears after `burned out`.
 
 ## Thread synchronization mechanisms
 
 | Primitive | Protects | Used by |
 |---|---|---|
-| `pthread_mutex_t dongle.lock` (one per dongle) | `taken`, `free_at`, `ticket`, the dongle's heap | the two neighbouring coders |
-| `pthread_cond_t dongle.cond` (one per dongle) | waiting for a dongle without busy-spinning | coders wait in `dongle_take`, `dongle_release` broadcasts |
+| `pthread_mutex_t sim.table_lock` | the arbitration: checking and taking both dongles atomically, the fifo `ticket` | coders in `dongles_take` / `dongles_release` |
+| `pthread_cond_t sim.table_cond` | waiting for dongles without busy-spinning | coders wait in `dongles_take`, `dongles_release` broadcasts |
+| `pthread_mutex_t dongle.lock` (one per dongle) | each dongle's `taken`, `free_at` and heap, while they are modified | `join_queue`, `grab`, `give_back` |
 | `pthread_mutex_t sim.state_lock` | `stop`, each coder's `last_compile` and `compiles` | coders write, monitor reads |
 | `pthread_mutex_t sim.print_lock` | standard output | every log line and the burnout message |
 
-**Waiting for a dongle (mutex + condition variable).** In `dongle_take`, a coder locks
-the dongle's mutex, pushes its request into the heap, and then loops:
+**Waiting for dongles (mutex + condition variable).** In `dongles_take`, a coder locks
+`table_lock`, pushes its request into both dongles' heaps, and then loops:
 
 ```c
-while (sim_running(sim) && !can_take(d, id))   // free + top of queue + cooldown over
-    pthread_cond_timedwait(&d->cond, &d->lock, &one_ms_later);
+while (sim_running(sim) && !can_go(c))   // both free + cooled + not reserved by others
+    pthread_cond_timedwait(&sim->table_cond, &sim->table_lock, &one_ms_later);
 ```
 
-`pthread_cond_timedwait` releases the mutex while sleeping and reacquires it on wake-up.
-The condition is always re-checked in a `while` loop, which covers spurious wake-ups,
-timeouts and broadcasts. `dongle_release` updates the state under the same mutex and
-calls `pthread_cond_broadcast` to wake the waiters.
+`pthread_cond_timedwait` releases `table_lock` while sleeping and reacquires it on
+wake-up. The condition is always re-checked in a `while` loop, which covers spurious
+wake-ups, timeouts and broadcasts. When the check succeeds, the coder removes its
+request from both heaps and marks both dongles as taken before releasing `table_lock`,
+so no other coder can take them in between. `dongles_release` updates both dongles under
+the same lock and calls `pthread_cond_broadcast` to wake the waiters.
 
 **Coder ↔ monitor communication.** The coder writes `last_compile` (when it starts
 compiling) and `compiles` (after compiling) under `state_lock`. The monitor reads the
@@ -187,10 +205,11 @@ race.
 `sim_stop()`, both of which take `state_lock`. Every loop (coder routine, dongle wait,
 `sleep_ms`) polls `sim_running()`.
 
-**Lock ordering.** The only nested locks are `dongle.lock → state_lock` (EDF key
-computation and `sim_running` inside `dongle_take`) and `print_lock → state_lock`
-(logging and the burnout announcement). `state_lock` is always the innermost lock and
-nothing holding it ever takes another lock, so the locks themselves cannot deadlock.
+**Lock ordering.** Nested locks always follow the same order:
+`table_lock → dongle.lock`, `table_lock → state_lock` (EDF key and `sim_running` inside
+`dongles_take`) and `print_lock → state_lock` (logging and the burnout announcement).
+`dongle.lock` and `state_lock` are always innermost, and only one dongle lock is held at a
+time, so the locks themselves cannot deadlock.
 
 The implementation was checked with `-fsanitize=thread` (no data races),
 `-fsanitize=address,undefined` and macOS `leaks` (no leaks).
@@ -220,8 +239,13 @@ An AI assistant (Claude) was used as a **tutor and reviewer**:
   coders, monitor) was written by me. The AI compiled and tested it after each step,
   pointed out errors and explained them, and I fixed them myself.
 - **Testing**: writing throw-away test harnesses (outside the repository) and running
-  them with ThreadSanitizer, AddressSanitizer and `leaks`. This is how the start-up
-  "chain" issue that led to the odd/even dongle order was found.
+  them with ThreadSanitizer, AddressSanitizer and `leaks`, plus a log checker that runs
+  every benchmark case of the evaluation sheet several times. This is how the dongle
+  "chains" were found.
 - **Written by the AI at my request**: the `Makefile`, the final `main.c` (thread
-  creation and joining), Norm formatting fixes, and this README. All of it was reviewed
+  creation and joining), Norm formatting fixes, and this README. After the evaluation
+  sheet's benchmark cases were run, the AI also redesigned the dongle acquisition: taking
+  both dongles atomically (`dongle.c`, `dongle_utils.c`), `heap_remove`, `log_compile`
+  and the single-coder case. This fixed the start-up chains, the burnouts in the cooldown
+  benchmark, and the "two takes right before compiling" log rule. All of it was reviewed
   and explained line by line so that I can justify every part.

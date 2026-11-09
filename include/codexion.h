@@ -6,7 +6,7 @@
 /*   By: roda-fon <roda-fon@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/26 12:00:57 by roda-fon          #+#    #+#             */
-/*   Updated: 2026/11/05 11:30:01 by roda-fon         ###   ########.fr       */
+/*   Updated: 2026/11/09 12:00:00 by roda-fon         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -55,10 +55,8 @@ typedef struct s_heap
 typedef struct s_dongle
 {
 	pthread_mutex_t	lock;
-	pthread_cond_t	cond;
 	int				taken;
 	long			free_at;
-	long			ticket;
 	t_heap			queue;
 }	t_dongle;
 
@@ -80,6 +78,9 @@ typedef struct s_sim
 	int				stop;
 	pthread_mutex_t	state_lock;
 	pthread_mutex_t	print_lock;
+	pthread_mutex_t	table_lock;
+	pthread_cond_t	table_cond;
+	long			ticket;
 	t_coder			*coders;
 	t_dongle		*dongles;
 	pthread_t		monitor;
@@ -103,11 +104,13 @@ int		heap_init(t_heap *h, int capacity);
 void	heap_free(t_heap *h);
 int		heap_push(t_heap *h, t_req req);
 t_req	heap_pop(t_heap *h);
+void	heap_remove(t_heap *h, int id);
 
 /* state.c */
 int		sim_running(t_sim *sim);
 void	sim_stop(t_sim *sim);
 void	log_state(t_sim *sim, int id, char *msg);
+void	log_compile(t_sim *sim, int id);
 
 /* init.c */
 int		sim_init(t_sim *sim);
@@ -115,9 +118,14 @@ int		sim_init(t_sim *sim);
 /* cleanup.c */
 void	sim_destroy(t_sim *sim);
 
+/* dongle_utils.c */
+long	req_key(t_coder *c);
+int		can_go(t_coder *c);
+void	wait_turn(t_sim *sim);
+
 /* dongle.c */
-int		dongle_take(t_coder *c, t_dongle *d);
-void	dongle_release(t_coder *c, t_dongle *d);
+int		dongles_take(t_coder *c);
+void	dongles_release(t_coder *c);
 
 /* coder.c */
 void	*coder_routine(void *arg);

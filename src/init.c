@@ -6,7 +6,7 @@
 /*   By: roda-fon <roda-fon@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/11/02 13:48:15 by roda-fon          #+#    #+#             */
-/*   Updated: 2026/11/05 12:19:40 by roda-fon         ###   ########.fr       */
+/*   Updated: 2026/11/09 12:00:00 by roda-fon         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -22,10 +22,8 @@ static int	init_dongles(t_sim *sim)
 	{
 		d = &sim->dongles[i];
 		pthread_mutex_init(&d->lock, NULL);
-		pthread_cond_init(&d->cond, NULL);
 		d->taken = 0;
 		d->free_at = 0;
-		d->ticket = 0;
 		if (heap_init(&d->queue, 2))
 			return (1);
 		i++;
@@ -66,6 +64,9 @@ int	sim_init(t_sim *sim)
 	sim->stop = 0;
 	pthread_mutex_init(&sim->state_lock, NULL);
 	pthread_mutex_init(&sim->print_lock, NULL);
+	pthread_mutex_init(&sim->table_lock, NULL);
+	pthread_cond_init(&sim->table_cond, NULL);
+	sim->ticket = 0;
 	sim->coders = malloc(sizeof(t_coder) * sim->p.coders);
 	sim->dongles = malloc(sizeof(t_dongle) * sim->p.coders);
 	if (sim->coders == NULL || sim->dongles == NULL)

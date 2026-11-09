@@ -6,33 +6,35 @@
 /*   By: roda-fon <roda-fon@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/11/04 17:49:37 by roda-fon          #+#    #+#             */
-/*   Updated: 2026/11/05 11:24:43 by roda-fon         ###   ########.fr       */
+/*   Updated: 2026/11/09 12:00:00 by roda-fon         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "codexion.h"
 
+static int	lonely_coder(t_coder *c)
+{
+	log_state(c->sim, c->id, "has taken a dongle");
+	while (sim_running(c->sim))
+		usleep(500);
+	return (1);
+}
+
 static int	compile_once(t_coder *c)
 {
-	if (dongle_take(c, c->first))
+	if (c->first == c->second)
+		return (lonely_coder(c));
+	if (dongles_take(c))
 		return (1);
-	log_state(c->sim, c->id, "has taken a dongle");
-	if (dongle_take(c, c->second))
-	{
-		dongle_release(c, c->first);
-		return (1);
-	}
-	log_state(c->sim, c->id, "has taken a dongle");
 	pthread_mutex_lock(&c->sim->state_lock);
 	c->last_compile = now_ms();
 	pthread_mutex_unlock(&c->sim->state_lock);
-	log_state(c->sim, c->id, "is compiling");
+	log_compile(c->sim, c->id);
 	sleep_ms(c->sim->p.compile, c->sim);
 	pthread_mutex_lock(&c->sim->state_lock);
 	c->compiles++;
 	pthread_mutex_unlock(&c->sim->state_lock);
-	dongle_release(c, c->first);
-	dongle_release(c, c->second);
+	dongles_release(c);
 	return (0);
 }
 

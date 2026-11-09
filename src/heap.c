@@ -6,7 +6,7 @@
 /*   By: roda-fon <roda-fon@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/28 14:00:16 by roda-fon          #+#    #+#             */
-/*   Updated: 2026/10/28 15:58:18 by roda-fon         ###   ########.fr       */
+/*   Updated: 2026/11/09 12:00:00 by roda-fon         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -48,4 +48,19 @@ t_req	heap_pop(t_heap *h)
 	h->items[0] = h->items[h->size];
 	sift_down(h, 0);
 	return (top);
+}
+
+void	heap_remove(t_heap *h, int id)
+{
+	int	i;
+
+	i = 0;
+	while (i < h->size && h->items[i].id != id)
+		i++;
+	if (i == h->size)
+		return ;
+	h->size -= 1;
+	h->items[i] = h->items[h->size];
+	sift_down(h, i);
+	sift_up(h, i);
 }
