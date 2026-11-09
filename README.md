@@ -235,8 +235,8 @@ An AI assistant (Claude) was used as a **tutor and reviewer**:
   and Coffman's conditions, and binary heaps, with analogies and small examples.
 - **Architecture**: proposing the file layout and the structures before any code was
   written.
-- **Code review**: the C logic (parsing, timing, heap, state, init/cleanup, dongles,
-  coders, monitor) was written by me. The AI compiled and tested it after each step,
+- **Code review**: the C logic for parsing, timing, the heap, state, init/cleanup, the
+  coder routine and the monitor was written by me. The AI compiled and tested it after each step,
   pointed out errors and explained them, and I fixed them myself.
 - **Testing**: writing throw-away test harnesses (outside the repository) and running
   them with ThreadSanitizer, AddressSanitizer and `leaks`, plus a log checker that runs
@@ -247,5 +247,5 @@ An AI assistant (Claude) was used as a **tutor and reviewer**:
   sheet's benchmark cases were run, the AI also redesigned the dongle acquisition: taking
   both dongles atomically (`dongle.c`, `dongle_utils.c`), `heap_remove`, `log_compile`
   and the single-coder case. This fixed the start-up chains, the burnouts in the cooldown
-  benchmark, and the "two takes right before compiling" log rule. All of it was reviewed
-  and explained line by line so that I can justify every part.
+  benchmark, and the "two takes right before compiling" log rule. All AI-written code is
+  reviewed with me line by line so that I can explain and modify every part.
