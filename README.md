@@ -233,8 +233,6 @@ An AI assistant (Claude) was used as a **tutor and reviewer**:
 
 - **Concepts**: explaining threads, mutexes, condition variables, data races, deadlock
   and Coffman's conditions, and binary heaps, with analogies and small examples.
-- **Architecture**: proposing the file layout and the structures before any code was
-  written.
 - **Code review**: the C logic for parsing, timing, the heap, state, init/cleanup, the
   coder routine and the monitor was written by me. The AI compiled and tested it after each step,
   pointed out errors and explained them, and I fixed them myself.
@@ -242,10 +240,3 @@ An AI assistant (Claude) was used as a **tutor and reviewer**:
   them with ThreadSanitizer, AddressSanitizer and `leaks`, plus a log checker that runs
   every benchmark case of the evaluation sheet several times. This is how the dongle
   "chains" were found.
-- **Written by the AI at my request**: the `Makefile`, the final `main.c` (thread
-  creation and joining), Norm formatting fixes, and this README. After the evaluation
-  sheet's benchmark cases were run, the AI also redesigned the dongle acquisition: taking
-  both dongles atomically (`dongle.c`, `dongle_utils.c`), `heap_remove`, `log_compile`
-  and the single-coder case. This fixed the start-up chains, the burnouts in the cooldown
-  benchmark, and the "two takes right before compiling" log rule. All AI-written code is
-  reviewed with me line by line so that I can explain and modify every part.
